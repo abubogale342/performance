@@ -1,12 +1,13 @@
 const PORT = 3331;
+const os = require("os");
 const express = require("express");
+const createWorker = require("./threads/promises");
 
 const sleep = require("./utils/sleep");
-const { Worker } = require("worker_threads");
 const app = express();
 
 const blocking = (req, res) => {
-  sleep(3000);
+  sleep(1000);
   res.send("blocking");
 };
 
@@ -16,16 +17,22 @@ const nonBlocking = (req, res) => {
 
 app.get("/blocking", blocking);
 app.get("/not-blocking", nonBlocking);
-app.get("/counter", (req, res) => {
-  const counter = new Worker("./threads/counter");
+app.get("/counter", async (req, res) => {
+  const workerPromises = [];
 
-  counter.on("message", (count) =>
-    res.status(200).send(`The result is ${count}`)
-  );
+  for (let i = 0; i < os.cpus().length; i++) {
+    workerPromises.push(createWorker());
+  }
 
-  counter.on("error", (msg) => {
-    res.status(404).send(`An error occurred: ${msg}`);
-  });
+  const thread_results = await Promise.all(workerPromises);
+
+  const totalCount =
+    thread_results[0] +
+    thread_results[1] +
+    thread_results[2] +
+    thread_results[3];
+
+  res.send(totalCount.toString());
 });
 
 app.listen(PORT, () => console.log(`Server Listening on port ${PORT} ...`));
